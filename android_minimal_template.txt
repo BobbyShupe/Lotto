@@ -1,3 +1,18 @@
+“Using the attached minimal Android template, create a new app that does X.
+You may:
+
+    Rename the app ID and app name
+
+    Add Activities/Composables/layout XML
+    You may not:
+
+    Change Gradle plugin versions
+
+    Add or remove core dependencies
+
+    Modify theme XML, except to update the app name if needed.”
+
+
 ----- FILE ./settings.gradle.kts -----
 pluginManagement {
     repositories {
