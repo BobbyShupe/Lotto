@@ -43,7 +43,8 @@ dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("com.google.android.material:material:1.12.0")
-
+    implementation("org.jsoup:jsoup:1.17.2")
+    implementation("androidx.gridlayout:gridlayout:1.0.0")
     // Optional but very common / recommended in 2025 minimal apps
     implementation("androidx.activity:activity-ktx:1.9.3")
     implementation("androidx.fragment:fragment-ktx:1.8.4") // even if not using fragments
