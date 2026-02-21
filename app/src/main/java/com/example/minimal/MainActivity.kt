@@ -33,7 +33,6 @@ val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "po
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var resultText: MaterialTextView
     private lateinit var selectedNumbersText: MaterialTextView
     private lateinit var latestWinningText: MaterialTextView
 
@@ -79,7 +78,7 @@ class MainActivity : AppCompatActivity() {
 
         latestWinningText = MaterialTextView(this).apply {
             text = "Latest Draw: Loading..."
-            textSize = 18f
+            textSize = 11f
             setTextColor(Color.DKGRAY)
             gravity = Gravity.CENTER
             setPadding(0, 0, 0, 24)
@@ -101,20 +100,6 @@ class MainActivity : AppCompatActivity() {
         container.addView(createSectionTitle("Powerball (Pick 1)"))
         container.addView(createGrid(maxPowerball, true))
 
-        val checkButton = MaterialButton(this).apply {
-            text = "Check Selection"
-            setOnClickListener { checkSelection() }
-            cornerRadius = 28.dpToPx().toInt()
-        }
-        container.addView(checkButton)
-
-        resultText = MaterialTextView(this).apply {
-            textSize = 18f
-            gravity = Gravity.CENTER
-            setPadding(0, 32, 0, 64)
-        }
-        container.addView(resultText)
-
         scrollView.addView(container)
         setContentView(scrollView)
 
@@ -135,14 +120,11 @@ class MainActivity : AppCompatActivity() {
                     .timeout(15000)
                     .get()
 
-                // Select all rows and grab the second one (index 1) to skip the header
                 val rows = doc.select("table tr")
                 if (rows.size < 2) throw IOException("Table not found")
 
                 val cells = rows[1].select("td")
 
-                // The working version expects at least 8 columns:
-                // 0: Date, 1-5: White Balls, 6: PB, 7: Power Play
                 if (cells.size >= 8) {
                     val date = cells[0].text().trim()
                     val white1 = cells[1].text().trim()
@@ -153,7 +135,7 @@ class MainActivity : AppCompatActivity() {
                     val powerball = cells[6].text().trim()
                     val powerPlay = cells[7].text().trim()
 
-                    val display = "Latest ($date): $white1 • $white2 • $white3 • $white4 • $white5 • PB $powerball (x$powerPlay)"
+                    val display = "Latest ($date): $white1 $white2 $white3 $white4 $white5 PB $powerball (x$powerPlay)"
 
                     withContext(Dispatchers.Main) {
                         latestWinningText.text = display
@@ -185,14 +167,22 @@ class MainActivity : AppCompatActivity() {
             selectedWhite.addAll(validWhite)
 
             validWhite.forEach { num ->
-                whiteButtons[num]?.setBackgroundColor(Color.DKGRAY)
+                whiteButtons[num]?.let { btn ->
+                    btn.backgroundTintList = null
+                    btn.setBackgroundColor(Color.parseColor("#616161"))  // solid selected gray
+                    btn.setTextColor(Color.WHITE)
+                }
             }
         }
 
         prefs[POWERBALL_KEY]?.let { savedPB ->
             if (savedPB in 1..maxPowerball) {
-                selectedPB = savedPB
-                pbButtons[savedPB]?.setBackgroundColor(Color.RED)
+                this.selectedPB = savedPB
+                pbButtons[savedPB]?.let { btn ->
+                    btn.backgroundTintList = null
+                    btn.setBackgroundColor(Color.parseColor("#D32F2F"))  // solid red
+                    btn.setTextColor(Color.WHITE)
+                }
             }
         }
 
@@ -229,6 +219,11 @@ class MainActivity : AppCompatActivity() {
                 minimumWidth = 0
                 minimumHeight = 40.dpToPx().toInt()
                 cornerRadius = 9999.dpToPx().toInt()
+                setTextColor(Color.BLACK)
+
+                // Force no theme tint from the start + initial neutral color
+                backgroundTintList = null
+                setBackgroundColor(Color.LTGRAY)  // starts light gray, no purple
 
                 if (isPowerball) pbButtons[i] = this else whiteButtons[i] = this
                 setOnClickListener {
@@ -252,41 +247,46 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun toggleWhite(num: Int) {
+        val btn = whiteButtons[num] ?: return
         if (selectedWhite.contains(num)) {
             selectedWhite.remove(num)
-            whiteButtons[num]?.setBackgroundColor(Color.LTGRAY)
+            btn.backgroundTintList = null
+            btn.setBackgroundColor(Color.LTGRAY)
+            btn.setTextColor(Color.BLACK)
         } else if (selectedWhite.size < whiteLimit) {
             selectedWhite.add(num)
-            whiteButtons[num]?.setBackgroundColor(Color.DKGRAY)
+            btn.backgroundTintList = null
+            btn.setBackgroundColor(Color.parseColor("#616161"))  // solid dark gray
+            btn.setTextColor(Color.WHITE)
         }
         updateDisplay()
     }
 
     private fun togglePowerball(num: Int) {
-        selectedPB?.let { pbButtons[it]?.setBackgroundColor(Color.LTGRAY) }
+        selectedPB?.let { prevNum ->
+            val prevBtn = pbButtons[prevNum]
+            prevBtn?.backgroundTintList = null
+            prevBtn?.setBackgroundColor(Color.LTGRAY)
+            prevBtn?.setTextColor(Color.BLACK)
+        }
+
+        val btn = pbButtons[num] ?: return
         if (selectedPB == num) {
             selectedPB = null
         } else {
             selectedPB = num
-            pbButtons[num]?.setBackgroundColor(Color.RED)
+            btn.backgroundTintList = null
+            btn.setBackgroundColor(Color.parseColor("#D32F2F"))  // solid vivid red
+            btn.setTextColor(Color.WHITE)
+
         }
         updateDisplay()
     }
 
     private fun updateDisplay() {
-        val whitePart = if (selectedWhite.isEmpty()) "None" else selectedWhite.sorted().joinToString(", ")
+        val whitePart = if (selectedWhite.isEmpty()) "None" else selectedWhite.sorted().joinToString(" ")
         val pbPart = selectedPB ?: "None"
-        selectedNumbersText.text = "Whites: $whitePart | PB: $pbPart"
-    }
-
-    private fun checkSelection() {
-        if (selectedWhite.size < whiteLimit || selectedPB == null) {
-            resultText.text = "Selection Incomplete"
-            resultText.setTextColor(Color.RED)
-        } else {
-            resultText.text = "Selection Complete!"
-            resultText.setTextColor(Color.GREEN)
-        }
+        selectedNumbersText.text = "WB $whitePart PB $pbPart"
     }
 
     private fun saveSelection() {
