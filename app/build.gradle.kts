@@ -48,4 +48,8 @@ dependencies {
     // Optional but very common / recommended in 2025 minimal apps
     implementation("androidx.activity:activity-ktx:1.9.3")
     implementation("androidx.fragment:fragment-ktx:1.8.4") // even if not using fragments
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.6")
+    // ── Add these two lines for DataStore ────────────────────────────────
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")  // usually already transitively included, but explicit is safer
 }
