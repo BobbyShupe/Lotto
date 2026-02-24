@@ -48,6 +48,17 @@ class MainActivity : AppCompatActivity() {
     private val whiteButtons = mutableMapOf<Int, MaterialButton>()
     private val pbButtons = mutableMapOf<Int, MaterialButton>()
 
+    // Winning numbers from latest draw
+    private val winningWhite = mutableSetOf<Int>()
+    private var winningPB: Int? = null
+
+    // Colors
+    private val COLOR_WINNING = Color.parseColor("#9C27B0")     // purple
+    private val COLOR_GOLD     = Color.parseColor("#FFD700")     // gold
+    private val COLOR_SELECTED_WHITE = Color.parseColor("#616161")
+    private val COLOR_SELECTED_PB    = Color.parseColor("#D32F2F")
+    private val COLOR_UNSELECTED     = Color.LTGRAY
+
     // DataStore keys
     private val WHITE_NUMBERS_KEY = stringSetPreferencesKey("white_numbers")
     private val POWERBALL_KEY = intPreferencesKey("powerball_number")
@@ -127,19 +138,29 @@ class MainActivity : AppCompatActivity() {
 
                 if (cells.size >= 8) {
                     val date = cells[0].text().trim()
-                    val white1 = cells[1].text().trim()
-                    val white2 = cells[2].text().trim()
-                    val white3 = cells[3].text().trim()
-                    val white4 = cells[4].text().trim()
-                    val white5 = cells[5].text().trim()
-                    val powerball = cells[6].text().trim()
+                    val w1 = cells[1].text().trim().toIntOrNull() ?: 0
+                    val w2 = cells[2].text().trim().toIntOrNull() ?: 0
+                    val w3 = cells[3].text().trim().toIntOrNull() ?: 0
+                    val w4 = cells[4].text().trim().toIntOrNull() ?: 0
+                    val w5 = cells[5].text().trim().toIntOrNull() ?: 0
+                    val pb = cells[6].text().trim().toIntOrNull() ?: 0
                     val powerPlay = cells[7].text().trim()
 
-                    val display = "Latest ($date): $white1 $white2 $white3 $white4 $white5 PB $powerball (x$powerPlay)"
+                    winningWhite.clear()
+                    winningWhite.addAll(listOf(w1, w2, w3, w4, w5).filter { it in 1..maxWhite })
+
+                    winningPB = if (pb in 1..maxPowerball) pb else null
+
+                    val whiteStr = winningWhite.sorted().joinToString(" ")
+                    val pbStr = winningPB?.toString() ?: "?"
+
+                    val display = "Latest ($date): $whiteStr PB $pbStr (x$powerPlay)"
 
                     withContext(Dispatchers.Main) {
                         latestWinningText.text = display
                         latestWinningText.setTextColor(Color.BLACK)
+
+                        highlightWinningNumbers()
                     }
                 } else {
                     throw IOException("Data format unexpected")
@@ -149,6 +170,34 @@ class MainActivity : AppCompatActivity() {
                 withContext(Dispatchers.Main) {
                     latestWinningText.text = "Latest Draw: Unable to load – check internet"
                     latestWinningText.setTextColor(Color.RED)
+                }
+            }
+        }
+    }
+
+    private fun highlightWinningNumbers() {
+        winningWhite.forEach { num ->
+            whiteButtons[num]?.let { btn ->
+                btn.backgroundTintList = null
+                if (selectedWhite.contains(num)) {
+                    btn.setBackgroundColor(COLOR_GOLD)
+                    btn.setTextColor(Color.BLACK)
+                } else {
+                    btn.setBackgroundColor(COLOR_WINNING)
+                    btn.setTextColor(Color.WHITE)
+                }
+            }
+        }
+
+        winningPB?.let { pb ->
+            pbButtons[pb]?.let { btn ->
+                btn.backgroundTintList = null
+                if (selectedPB == pb) {
+                    btn.setBackgroundColor(COLOR_GOLD)
+                    btn.setTextColor(Color.BLACK)
+                } else {
+                    btn.setBackgroundColor(COLOR_WINNING)
+                    btn.setTextColor(Color.WHITE)
                 }
             }
         }
@@ -169,7 +218,7 @@ class MainActivity : AppCompatActivity() {
             validWhite.forEach { num ->
                 whiteButtons[num]?.let { btn ->
                     btn.backgroundTintList = null
-                    btn.setBackgroundColor(Color.parseColor("#616161"))  // solid selected gray
+                    btn.setBackgroundColor(COLOR_SELECTED_WHITE)
                     btn.setTextColor(Color.WHITE)
                 }
             }
@@ -180,13 +229,14 @@ class MainActivity : AppCompatActivity() {
                 this.selectedPB = savedPB
                 pbButtons[savedPB]?.let { btn ->
                     btn.backgroundTintList = null
-                    btn.setBackgroundColor(Color.parseColor("#D32F2F"))  // solid red
+                    btn.setBackgroundColor(COLOR_SELECTED_PB)
                     btn.setTextColor(Color.WHITE)
                 }
             }
         }
 
         updateDisplay()
+        highlightWinningNumbers()  // apply winning highlights after selections loaded
     }
 
     private fun createSectionTitle(title: String) = MaterialTextView(this).apply {
@@ -219,11 +269,10 @@ class MainActivity : AppCompatActivity() {
                 minimumWidth = 0
                 minimumHeight = 40.dpToPx().toInt()
                 cornerRadius = 9999.dpToPx().toInt()
-                setTextColor(Color.BLACK)
 
-                // Force no theme tint from the start + initial neutral color
                 backgroundTintList = null
-                setBackgroundColor(Color.LTGRAY)  // starts light gray, no purple
+                setBackgroundColor(Color.LTGRAY)
+                setTextColor(Color.BLACK)
 
                 if (isPowerball) pbButtons[i] = this else whiteButtons[i] = this
                 setOnClickListener {
@@ -248,37 +297,65 @@ class MainActivity : AppCompatActivity() {
 
     private fun toggleWhite(num: Int) {
         val btn = whiteButtons[num] ?: return
+
         if (selectedWhite.contains(num)) {
             selectedWhite.remove(num)
             btn.backgroundTintList = null
-            btn.setBackgroundColor(Color.LTGRAY)
-            btn.setTextColor(Color.BLACK)
+            if (winningWhite.contains(num)) {
+                // was golden → now just winning (purple)
+                btn.setBackgroundColor(COLOR_WINNING)
+                btn.setTextColor(Color.WHITE)
+            } else {
+                // normal deselection
+                btn.setBackgroundColor(Color.LTGRAY)
+                btn.setTextColor(Color.BLACK)
+            }
         } else if (selectedWhite.size < whiteLimit) {
             selectedWhite.add(num)
             btn.backgroundTintList = null
-            btn.setBackgroundColor(Color.parseColor("#616161"))  // solid dark gray
-            btn.setTextColor(Color.WHITE)
+            if (winningWhite.contains(num)) {
+                // selected + winning → gold
+                btn.setBackgroundColor(COLOR_GOLD)
+                btn.setTextColor(Color.BLACK)
+            } else {
+                // normal selection
+                btn.setBackgroundColor(COLOR_SELECTED_WHITE)
+                btn.setTextColor(Color.WHITE)
+            }
         }
         updateDisplay()
     }
 
     private fun togglePowerball(num: Int) {
+        val btn = pbButtons[num] ?: return
+
+        // Reset previous if changing
         selectedPB?.let { prevNum ->
             val prevBtn = pbButtons[prevNum]
             prevBtn?.backgroundTintList = null
-            prevBtn?.setBackgroundColor(Color.LTGRAY)
-            prevBtn?.setTextColor(Color.BLACK)
+            if (winningPB == prevNum) {
+                prevBtn?.setBackgroundColor(COLOR_WINNING)
+                prevBtn?.setTextColor(Color.WHITE)
+            } else {
+                prevBtn?.setBackgroundColor(Color.LTGRAY)
+                prevBtn?.setTextColor(Color.BLACK)
+            }
         }
 
-        val btn = pbButtons[num] ?: return
         if (selectedPB == num) {
             selectedPB = null
         } else {
             selectedPB = num
             btn.backgroundTintList = null
-            btn.setBackgroundColor(Color.parseColor("#D32F2F"))  // solid vivid red
-            btn.setTextColor(Color.WHITE)
-
+            if (winningPB == num) {
+                // selected + winning → gold
+                btn.setBackgroundColor(COLOR_GOLD)
+                btn.setTextColor(Color.BLACK)
+            } else {
+                // normal selection
+                btn.setBackgroundColor(COLOR_SELECTED_PB)
+                btn.setTextColor(Color.WHITE)
+            }
         }
         updateDisplay()
     }
