@@ -56,7 +56,7 @@ class MainActivity : AppCompatActivity() {
     private val maxWhite = 69
     private val maxPowerball = 26
     private val whiteLimit = 5
-    private val numbersPerRow = 7
+    private val numbersPerRow = 10
 
     private val selectedWhite = mutableSetOf<Int>()
     private var selectedPB: Int? = null
