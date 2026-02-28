@@ -86,16 +86,19 @@ class CheckWinningWorker(
                 val whiteMatchCount = userWhite.intersect(whiteNumbers).size
                 val powerballMatch = userPowerball == powerball
 
-                showDrawNotification(fetchedDateStr, whiteMatchCount, powerballMatch)
+                // Only notify if there is at least one match
+                if (whiteMatchCount > 0 || powerballMatch) {
+                    showDrawNotification(fetchedDateStr, whiteMatchCount, powerballMatch)
+                }
 
-                // Save the new date
+                // Always remember this draw date (so we don't notify again on same draw)
                 applicationContext.dataStore.edit { settings ->
                     settings[LAST_DRAW_DATE_KEY] = fetchedDateStr
                 }
 
                 Result.success()
             } else {
-                // Same draw → no notification
+                // Same draw → no action
                 Result.success()
             }
         } catch (e: IOException) {
@@ -125,24 +128,20 @@ class CheckWinningWorker(
 
         val message = buildString {
             append("New Powerball draw on $drawDate! ")
-            if (whiteMatchCount > 0 || powerballMatch) {
-                append("You have ")
-                if (whiteMatchCount > 0) append("$whiteMatchCount white ball${if (whiteMatchCount > 1) "s" else ""}")
-                if (powerballMatch) {
-                    if (whiteMatchCount > 0) append(" + ")
-                    append("Powerball")
-                }
-                append(" match")
-                if (totalMatches > 1) append("es")
-                append("!")
-            } else {
-                append("No matches this time — better luck next draw!")
+            append("You have ")
+            if (whiteMatchCount > 0) append("$whiteMatchCount white ball${if (whiteMatchCount > 1) "s" else ""}")
+            if (powerballMatch) {
+                if (whiteMatchCount > 0) append(" + ")
+                append("Powerball")
             }
+            append(" match")
+            if (totalMatches > 1) append("es")
+            append("!")
         }
 
         val notification = NotificationCompat.Builder(applicationContext, channelId)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("New Powerball Draw")
+            .setContentTitle("Powerball Match Alert")
             .setContentText(message)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
