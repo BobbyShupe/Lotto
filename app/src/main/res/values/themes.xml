@@ -1,12 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources xmlns:tools="http://schemas.android.com/tools">
+<resources>
 
-    <!-- Base application theme - Material 3 with no action bar -->
     <style name="Theme.MinimalApp" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Override any defaults if needed; the md_* colors above are now resolved -->
-        <item name="colorPrimary">@color/md_theme_light_primary</item>
-        <item name="colorOnPrimary">@color/md_theme_light_onPrimary</item>
-        <!-- Add more overrides only if you want to customize further -->
+        <item name="colorPrimary">#1976D2</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorSecondary">#03DAC5</item>
+        <item name="android:statusBarColor">?attr/colorPrimary</item>
     </style>
 
 </resources>

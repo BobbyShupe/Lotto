@@ -1,5 +1,11 @@
 package com.example.minimal
 
+import android.content.Intent
+import android.view.View
+import com.google.android.material.appbar.MaterialToolbar
+import android.view.Menu
+import android.view.MenuItem
+
 import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -90,19 +96,19 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val scrollView = ScrollView(this).apply {
-            layoutParams = ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-            )
-            setBackgroundColor(Color.parseColor("#F5F5F5"))
-        }
+        // ONE content view only
+        setContentView(R.layout.activity_main)
 
-        val container = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(32)
-        }
+        // Toolbar (top-right settings icon lives here)
+        val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
+        setSupportActionBar(toolbar)
 
+        // This is the LinearLayout INSIDE the ScrollView
+        val container = findViewById<LinearLayout>(R.id.contentContainer)
+
+        container.setBackgroundColor(Color.parseColor("#F5F5F5"))
+
+        // Title
         container.addView(MaterialTextView(this).apply {
             text = "Powerball Selector"
             textSize = 28f
@@ -111,6 +117,7 @@ class MainActivity : AppCompatActivity() {
             setPadding(0, 0, 0, 16)
         })
 
+        // Latest draw text
         latestWinningText = MaterialTextView(this).apply {
             text = "Latest Draw: Loading..."
             textSize = 11f
@@ -120,6 +127,7 @@ class MainActivity : AppCompatActivity() {
         }
         container.addView(latestWinningText)
 
+        // Selected numbers text
         selectedNumbersText = MaterialTextView(this).apply {
             text = "Select your numbers"
             textSize = 16f
@@ -129,16 +137,15 @@ class MainActivity : AppCompatActivity() {
         }
         container.addView(selectedNumbersText)
 
+        // White balls
         container.addView(createSectionTitle("White Balls (Pick 5)"))
         container.addView(createGrid(maxWhite, false))
 
+        // Powerball
         container.addView(createSectionTitle("Powerball (Pick 1)"))
         container.addView(createGrid(maxPowerball, true))
 
-        scrollView.addView(container)
-        setContentView(scrollView)
-
-        // Request POST_NOTIFICATIONS permission on Android 13+
+        // ---- Notifications permission (Android 13+) ----
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(
                     this,
@@ -147,13 +154,15 @@ class MainActivity : AppCompatActivity() {
             ) {
                 scheduleBackgroundWinningCheck()
             } else {
-                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                notificationPermissionLauncher.launch(
+                    Manifest.permission.POST_NOTIFICATIONS
+                )
             }
         } else {
             scheduleBackgroundWinningCheck()
         }
 
-        // Load saved selection & initial fetch for UI
+        // ---- Restore state + fetch winning numbers ----
         lifecycleScope.launch {
             loadSavedSelection()
         }
@@ -161,6 +170,21 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             fetchLatestWinningNumbersForUI()
         }
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            R.id.menu_settings -> {
+                startActivity(Intent(this, SettingsActivity::class.java))
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
+    }
+
+    override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        menuInflater.inflate(R.menu.main_menu, menu)
+        return true
     }
 
     private fun scheduleBackgroundWinningCheck() {
