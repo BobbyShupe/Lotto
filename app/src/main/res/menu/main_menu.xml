@@ -2,6 +2,13 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
 
     <item
+        android:id="@+id/menu_toggle_highlights"
+        android:title="Highlight Winners"
+        android:checkable="true"
+        android:checked="true"
+        android:icon="@android:drawable/ic_menu_view" />
+
+    <item
         android:id="@+id/menu_settings"
         android:title="Settings"
         android:icon="@android:drawable/ic_menu_preferences"
