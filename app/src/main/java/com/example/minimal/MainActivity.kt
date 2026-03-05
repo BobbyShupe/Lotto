@@ -1,6 +1,5 @@
 package com.example.minimal
 
-
 import androidx.lifecycle.lifecycleScope
 import android.content.Intent
 import android.Manifest
@@ -44,7 +43,6 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 import android.util.Log
 
-// DataStore delegate
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "powerball_selection")
 
 class MainActivity : AppCompatActivity() {
@@ -52,7 +50,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var selectedNumbersText: MaterialTextView
     private lateinit var latestWinningText: MaterialTextView
 
-    // Powerball Rules
     private val maxWhite = 69
     private val maxPowerball = 26
     private val whiteLimit = 5
@@ -64,27 +61,23 @@ class MainActivity : AppCompatActivity() {
     private val whiteButtons = mutableMapOf<Int, MaterialButton>()
     private val pbButtons = mutableMapOf<Int, MaterialButton>()
 
-    // Winning numbers from latest draw
     private val winningWhite = mutableSetOf<Int>()
     private var winningPB: Int? = null
 
-    // Toggles
     private var showWinningHighlights = true
-    private var notificationsEnabled = true   // default value
+    private var notificationsEnabled = true
 
-    // Colors
-    private val COLOR_WINNING = Color.parseColor("#9C27B0")     // purple
-    private val COLOR_GOLD     = Color.parseColor("#FFD700")     // gold
+    private val COLOR_WINNING = Color.parseColor("#9C27B0")
+    private val COLOR_GOLD     = Color.parseColor("#FFD700")
     private val COLOR_SELECTED_WHITE = Color.parseColor("#616161")
     private val COLOR_SELECTED_PB    = Color.parseColor("#D32F2F")
     private val COLOR_UNSELECTED     = Color.LTGRAY
 
-    // DataStore keys
     private val WHITE_NUMBERS_KEY      = stringSetPreferencesKey("white_numbers")
     private val POWERBALL_KEY          = intPreferencesKey("powerball_number")
     private val HIGHLIGHT_ENABLED_KEY  = booleanPreferencesKey("highlight_enabled")
     private val NOTIFICATIONS_ENABLED_KEY = booleanPreferencesKey("notifications_enabled")
-    private val LAST_DRAW_DATE_KEY     = stringPreferencesKey("last_known_draw_date")  // used by worker
+    private val LAST_DRAW_DATE_KEY     = stringPreferencesKey("last_known_draw_date")
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -104,7 +97,6 @@ class MainActivity : AppCompatActivity() {
         val container = findViewById<LinearLayout>(R.id.contentContainer)
         container.setBackgroundColor(Color.parseColor("#F5F5F5"))
 
-        // Title
         container.addView(MaterialTextView(this).apply {
             text = "Powerball Selector"
             textSize = 28f
@@ -113,7 +105,6 @@ class MainActivity : AppCompatActivity() {
             setPadding(0, 0, 0, 16)
         })
 
-        // Latest draw
         latestWinningText = MaterialTextView(this).apply {
             text = "Latest Draw: Loading..."
             textSize = 11f
@@ -123,7 +114,6 @@ class MainActivity : AppCompatActivity() {
         }
         container.addView(latestWinningText)
 
-        // Selected numbers display
         selectedNumbersText = MaterialTextView(this).apply {
             text = "Select your numbers"
             textSize = 16f
@@ -133,15 +123,26 @@ class MainActivity : AppCompatActivity() {
         }
         container.addView(selectedNumbersText)
 
-        // White balls section
         container.addView(createSectionTitle("White Balls (Pick 5)"))
         container.addView(createGrid(maxWhite, false))
 
-        // Powerball section
         container.addView(createSectionTitle("Powerball (Pick 1)"))
         container.addView(createGrid(maxPowerball, true))
 
-        // Load saved preferences (numbers + toggles) and fetch latest draw
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) == PackageManager.PERMISSION_GRANTED
+            ) {
+                scheduleBackgroundWinningCheck()
+            } else {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        } else {
+            scheduleBackgroundWinningCheck()
+        }
+
         lifecycleScope.launch { loadSavedPreferences() }
         lifecycleScope.launch { fetchLatestWinningNumbersForUI() }
     }
@@ -185,6 +186,11 @@ class MainActivity : AppCompatActivity() {
                 true
             }
 
+            R.id.menu_history -> {
+                startActivity(Intent(this, HistoryActivity::class.java))
+                true
+            }
+
             R.id.menu_settings -> {
                 startActivity(Intent(this, SettingsActivity::class.java))
                 true
@@ -197,7 +203,6 @@ class MainActivity : AppCompatActivity() {
     private fun scheduleBackgroundWinningCheck() {
         if (!notificationsEnabled) return
 
-        // Android 13+ permission check
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(
                     this,
@@ -236,7 +241,6 @@ class MainActivity : AppCompatActivity() {
     private suspend fun loadSavedPreferences() {
         val prefs = dataStore.data.first()
 
-        // White balls
         prefs[WHITE_NUMBERS_KEY]?.let { savedSet ->
             val validWhite = savedSet.mapNotNull { it.toIntOrNull() }
                 .filter { it in 1..maxWhite }
@@ -255,7 +259,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Powerball
         prefs[POWERBALL_KEY]?.let { savedPB ->
             if (savedPB in 1..maxPowerball) {
                 selectedPB = savedPB
@@ -267,16 +270,13 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // UI toggles
         showWinningHighlights = prefs[HIGHLIGHT_ENABLED_KEY] ?: true
         notificationsEnabled = prefs[NOTIFICATIONS_ENABLED_KEY] ?: true
 
-        // Apply states
         updateDisplay()
         applyHighlightState()
-        invalidateOptionsMenu()  // refresh menu checkbox states
+        invalidateOptionsMenu()
 
-        // Schedule background check if enabled
         if (notificationsEnabled) {
             scheduleBackgroundWinningCheck()
         }
@@ -316,7 +316,6 @@ class MainActivity : AppCompatActivity() {
     private fun togglePowerball(num: Int) {
         val btn = pbButtons[num] ?: return
 
-        // Reset previous
         selectedPB?.let { prev ->
             pbButtons[prev]?.let { prevBtn ->
                 prevBtn.backgroundTintList = null
@@ -331,7 +330,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Toggle
         if (selectedPB == num) {
             selectedPB = null
         } else {
@@ -432,7 +430,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun Int.dpToPx(): Float = toFloat().dpToPx()
 
-    // Placeholder — replace with your actual fetch logic
     private suspend fun fetchLatestWinningNumbersForUI() {
         withContext(Dispatchers.IO) {
             try {
@@ -457,7 +454,7 @@ class MainActivity : AppCompatActivity() {
                         winningWhite.clear()
                         winningWhite.addAll(white)
                         winningPB = pb
-                        latestWinningText.text = "Latest Draw: ${white.joinToString(" ")} PB $pb"
+                        latestWinningText.text = "Latest Draw: ${white.sorted().joinToString(" ")} PB $pb"
                         applyHighlightState()
                     }
                 }
@@ -518,7 +515,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Non-selected winning numbers go back to unselected color
         winningWhite.forEach { num ->
             if (!selectedWhite.contains(num)) {
                 whiteButtons[num]?.let { btn ->

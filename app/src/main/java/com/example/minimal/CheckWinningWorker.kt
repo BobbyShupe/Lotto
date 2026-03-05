@@ -14,6 +14,8 @@ import androidx.work.WorkerParameters
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import org.jsoup.Jsoup
 import java.io.IOException
 import java.time.LocalDate
@@ -24,10 +26,12 @@ import java.time.format.DateTimeParseException
 private val WHITE_NUMBERS_KEY       = stringSetPreferencesKey("white_numbers")
 private val POWERBALL_KEY           = intPreferencesKey("powerball_number")
 private val LAST_DRAW_DATE_KEY      = stringPreferencesKey("last_known_draw_date")
+private val HISTORY_KEY             = stringPreferencesKey("winning_history_json")
 
 private fun notifyKey(categoryId: String) = booleanPreferencesKey("notify_$categoryId")
 
 private val DATE_FORMATTER = DateTimeFormatter.ofPattern("MM/dd/yyyy")
+private val json = Json { ignoreUnknownKeys = true }
 
 class CheckWinningWorker(
     appContext: Context,
@@ -67,6 +71,7 @@ class CheckWinningWorker(
                 return@withContext Result.success()
             }
 
+            // Parse winning numbers
             val winningWhite = listOfNotNull(
                 cells[1].text().trim().toIntOrNull(),
                 cells[2].text().trim().toIntOrNull(),
@@ -77,6 +82,38 @@ class CheckWinningWorker(
 
             val winningPB = cells[6].text().trim().toIntOrNull()?.takeIf { it in 1..26 }
 
+            // ────────────────────────────────────────────────
+            // Store to history (including user's numbers at that moment)
+            // ────────────────────────────────────────────────
+            val historyJson = prefs[HISTORY_KEY] ?: "[]"
+            val historyList = json.decodeFromString<MutableList<HistoryEntry>>(historyJson)
+
+            // Avoid duplicate entries for the same date
+            if (historyList.none { it.drawDate == fetchedDateStr }) {
+                val userWhiteAtTime = prefs[WHITE_NUMBERS_KEY]
+                    ?.mapNotNull { it.toIntOrNull() }
+                    ?.toSet() ?: emptySet()
+
+                val userPBAtTime = prefs[POWERBALL_KEY]
+
+                historyList.add(
+                    HistoryEntry(
+                        drawDate = fetchedDateStr,
+                        winningWhite = winningWhite,
+                        winningPowerball = winningPB,
+                        userWhite = userWhiteAtTime,
+                        userPowerball = userPBAtTime,
+                        note = ""   // starts empty
+                    )
+                )
+
+                // No limit - keep all entries
+                applicationContext.dataStore.edit { settings ->
+                    settings[HISTORY_KEY] = json.encodeToString(historyList)
+                }
+            }
+
+            // User's current selection for matching/notification
             val userWhite = prefs[WHITE_NUMBERS_KEY]
                 ?.mapNotNull { it.toIntOrNull() }
                 ?.toSet() ?: emptySet()
@@ -86,12 +123,7 @@ class CheckWinningWorker(
             val whiteMatches = userWhite.intersect(winningWhite).size
             val pbMatch = userPB == winningPB
 
-            val category = when {
-                whiteMatches == 0 && !pbMatch ->
-                    NotificationChannels.MATCH_CATEGORIES.firstOrNull { it.id == "no_match" }
-                else ->
-                    NotificationChannels.findCategory(whiteMatches, pbMatch)
-            }
+            val category = NotificationChannels.findCategory(whiteMatches, pbMatch)
 
             if (category != null) {
                 val notifyPrefs = applicationContext.settingsDataStore.data.first()
@@ -107,6 +139,7 @@ class CheckWinningWorker(
                 }
             }
 
+            // Remember this draw date to avoid re-processing
             applicationContext.dataStore.edit { settings ->
                 settings[LAST_DRAW_DATE_KEY] = fetchedDateStr
             }

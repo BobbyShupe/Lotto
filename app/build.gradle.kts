@@ -1,6 +1,7 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.serialization") version "1.9.24"
 }
 
 android {
@@ -54,4 +55,5 @@ dependencies {
     // ── Add these two lines for DataStore ────────────────────────────────
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")  // usually already transitively included, but explicit is safer
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.1")
 }
