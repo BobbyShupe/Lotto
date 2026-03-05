@@ -16,6 +16,7 @@ data class MatchCategory(
 object NotificationChannels {
 
     val MATCH_CATEGORIES = listOf(
+        MatchCategory("no_match",   "No matches",                      0, false),
         MatchCategory("pb_only",    "Powerball Only",                  0, true),
         MatchCategory("wb1",        "1 White Ball",                    1, false),
         MatchCategory("wb1_pb",     "1 White Ball + Powerball",        1, true),
@@ -34,7 +35,6 @@ object NotificationChannels {
 
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        // Optional: group channels in system settings (Android 8.1+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             val group = NotificationChannelGroup("powerball_matches", "Powerball Match Alerts")
             manager.createNotificationChannelGroup(group)
@@ -50,8 +50,6 @@ object NotificationChannels {
             ).apply {
                 description = "Alerts for ${category.label.lowercase()}"
                 enableVibration(true)
-                // enableLights(true)           // optional
-                // lightColor = Color.GREEN     // optional
                 group = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) "powerball_matches" else null
             }
 
@@ -59,16 +57,12 @@ object NotificationChannels {
         }
     }
 
-    /**
-     * Returns the recommended importance level for a match category.
-     * This is used both when creating channels and when building notifications.
-     */
     fun getImportance(category: MatchCategory): Int = when {
-        category.wb == 5 && category.pb -> NotificationManager.IMPORTANCE_HIGH     // Jackpot – urgent
-        category.wb == 5                -> NotificationManager.IMPORTANCE_HIGH     // $1M prize tier
-        category.wb >= 4                -> NotificationManager.IMPORTANCE_HIGH     // Significant prizes
-        category.wb >= 3                -> NotificationManager.IMPORTANCE_DEFAULT  // Decent prize
-        else                            -> NotificationManager.IMPORTANCE_LOW       // Small prizes
+        category.wb == 5 && category.pb -> NotificationManager.IMPORTANCE_HIGH     // Jackpot
+        category.wb == 5                -> NotificationManager.IMPORTANCE_HIGH     // Major prize
+        category.wb >= 4                -> NotificationManager.IMPORTANCE_HIGH     // Significant
+        category.wb >= 3                -> NotificationManager.IMPORTANCE_DEFAULT   // Decent prize
+        else                            -> NotificationManager.IMPORTANCE_LOW        // Small or no match
     }
 
     fun findCategory(wb: Int, pb: Boolean): MatchCategory? =

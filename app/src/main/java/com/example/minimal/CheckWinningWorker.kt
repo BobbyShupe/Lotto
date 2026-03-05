@@ -4,6 +4,7 @@ import android.app.NotificationManager
 import android.content.Context
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -19,10 +20,12 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
 
-// DataStore keys (must match MainActivity)
-private val WHITE_NUMBERS_KEY = stringSetPreferencesKey("white_numbers")
-private val POWERBALL_KEY    = intPreferencesKey("powerball_number")
-private val LAST_DRAW_DATE_KEY = stringPreferencesKey("last_known_draw_date")
+// DataStore keys
+private val WHITE_NUMBERS_KEY       = stringSetPreferencesKey("white_numbers")
+private val POWERBALL_KEY           = intPreferencesKey("powerball_number")
+private val LAST_DRAW_DATE_KEY      = stringPreferencesKey("last_known_draw_date")
+
+private fun notifyKey(categoryId: String) = booleanPreferencesKey("notify_$categoryId")
 
 private val DATE_FORMATTER = DateTimeFormatter.ofPattern("MM/dd/yyyy")
 
@@ -60,47 +63,56 @@ class CheckWinningWorker(
 
             val isNewDraw = lastKnownDate == null || fetchedDate.isAfter(lastKnownDate)
 
-            if (isNewDraw) {
-                val winningWhite = listOfNotNull(
-                    cells[1].text().trim().toIntOrNull(),
-                    cells[2].text().trim().toIntOrNull(),
-                    cells[3].text().trim().toIntOrNull(),
-                    cells[4].text().trim().toIntOrNull(),
-                    cells[5].text().trim().toIntOrNull()
-                ).filter { it in 1..69 }.toSet()
-
-                val winningPB = cells[6].text().trim().toIntOrNull()?.takeIf { it in 1..26 }
-
-                val userWhite = prefs[WHITE_NUMBERS_KEY]
-                    ?.mapNotNull { it.toIntOrNull() }
-                    ?.toSet() ?: emptySet()
-
-                val userPB = prefs[POWERBALL_KEY]
-
-                val whiteMatches = userWhite.intersect(winningWhite).size
-                val pbMatch = userPB == winningPB
-
-                if (whiteMatches > 0 || pbMatch) {
-                    val category = NotificationChannels.findCategory(whiteMatches, pbMatch)
-                    if (category != null) {
-                        showMatchNotification(
-                            drawDate = fetchedDateStr,
-                            category = category,
-                            whiteMatches = whiteMatches,
-                            pbMatch = pbMatch
-                        )
-                    }
-                }
-
-                // Remember this draw so we don't notify again
-                applicationContext.dataStore.edit { settings ->
-                    settings[LAST_DRAW_DATE_KEY] = fetchedDateStr
-                }
-
-                Result.success()
-            } else {
-                Result.success()
+            if (!isNewDraw) {
+                return@withContext Result.success()
             }
+
+            val winningWhite = listOfNotNull(
+                cells[1].text().trim().toIntOrNull(),
+                cells[2].text().trim().toIntOrNull(),
+                cells[3].text().trim().toIntOrNull(),
+                cells[4].text().trim().toIntOrNull(),
+                cells[5].text().trim().toIntOrNull()
+            ).filter { it in 1..69 }.toSet()
+
+            val winningPB = cells[6].text().trim().toIntOrNull()?.takeIf { it in 1..26 }
+
+            val userWhite = prefs[WHITE_NUMBERS_KEY]
+                ?.mapNotNull { it.toIntOrNull() }
+                ?.toSet() ?: emptySet()
+
+            val userPB = prefs[POWERBALL_KEY]
+
+            val whiteMatches = userWhite.intersect(winningWhite).size
+            val pbMatch = userPB == winningPB
+
+            val category = when {
+                whiteMatches == 0 && !pbMatch ->
+                    NotificationChannels.MATCH_CATEGORIES.firstOrNull { it.id == "no_match" }
+                else ->
+                    NotificationChannels.findCategory(whiteMatches, pbMatch)
+            }
+
+            if (category != null) {
+                val notifyPrefs = applicationContext.settingsDataStore.data.first()
+                val shouldNotify = notifyPrefs[notifyKey(category.id)] ?: true
+
+                if (shouldNotify) {
+                    showMatchNotification(
+                        drawDate = fetchedDateStr,
+                        category = category,
+                        whiteMatches = whiteMatches,
+                        pbMatch = pbMatch
+                    )
+                }
+            }
+
+            applicationContext.dataStore.edit { settings ->
+                settings[LAST_DRAW_DATE_KEY] = fetchedDateStr
+            }
+
+            Result.success()
+
         } catch (e: IOException) {
             Result.retry()
         } catch (e: Exception) {
@@ -118,22 +130,30 @@ class CheckWinningWorker(
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         val title = when {
-            whiteMatches == 5 && pbMatch -> "JACKPOT MATCH!"
-            whiteMatches == 5 -> "5 White Balls Match!"
-            else -> "Powerball Match Alert"
+            whiteMatches == 5 && pbMatch -> "JACKPOT WINNER!"
+            whiteMatches == 5 -> "5 White Balls – Major Prize!"
+            whiteMatches >= 4 -> "Strong Match – Prize!"
+            whiteMatches >= 1 || pbMatch -> "You Matched!"
+            else -> "Draw Result"
         }
 
         val message = buildString {
             append("Draw on $drawDate: ")
-            append("You matched ")
-            if (whiteMatches > 0) {
-                append("$whiteMatches white ball${if (whiteMatches > 1) "s" else ""}")
+            when {
+                whiteMatches == 5 && pbMatch -> append("5 white + Powerball – Jackpot!")
+                whiteMatches == 5 -> append("5 white balls matched")
+                whiteMatches > 0 || pbMatch -> {
+                    if (whiteMatches > 0) {
+                        append("$whiteMatches white ${if (whiteMatches > 1) "balls" else "ball"}")
+                    }
+                    if (pbMatch) {
+                        if (whiteMatches > 0) append(" + ")
+                        append("Powerball")
+                    }
+                    append(" matched.")
+                }
+                else -> append("No matches this time.")
             }
-            if (pbMatch) {
-                if (whiteMatches > 0) append(" + ")
-                append("Powerball")
-            }
-            append("!")
         }
 
         val channelImportance = NotificationChannels.getImportance(category)
@@ -152,9 +172,7 @@ class CheckWinningWorker(
             .setAutoCancel(true)
             .build()
 
-        // Unique ID per category prevents overwriting older notifications of different match levels
         val notificationId = category.id.hashCode()
-
         notificationManager.notify(notificationId, notification)
     }
 }
