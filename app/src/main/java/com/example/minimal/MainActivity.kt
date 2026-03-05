@@ -1,10 +1,8 @@
 package com.example.minimal
 
+
 import androidx.lifecycle.lifecycleScope
 import android.content.Intent
-import android.view.Menu
-import android.view.MenuItem
-import android.view.View
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
@@ -13,6 +11,8 @@ import android.os.Build
 import android.os.Bundle
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.Menu
+import android.view.MenuItem
 import android.widget.GridLayout
 import android.widget.LinearLayout
 import androidx.activity.result.contract.ActivityResultContracts
@@ -20,11 +20,12 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
-import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
@@ -67,8 +68,9 @@ class MainActivity : AppCompatActivity() {
     private val winningWhite = mutableSetOf<Int>()
     private var winningPB: Int? = null
 
-    // Toggle for winning highlights
+    // Toggles
     private var showWinningHighlights = true
+    private var notificationsEnabled = true   // default value
 
     // Colors
     private val COLOR_WINNING = Color.parseColor("#9C27B0")     // purple
@@ -78,14 +80,16 @@ class MainActivity : AppCompatActivity() {
     private val COLOR_UNSELECTED     = Color.LTGRAY
 
     // DataStore keys
-    private val WHITE_NUMBERS_KEY = stringSetPreferencesKey("white_numbers")
-    private val POWERBALL_KEY = intPreferencesKey("powerball_number")
-    private val HIGHLIGHT_ENABLED_KEY = booleanPreferencesKey("highlight_enabled")
+    private val WHITE_NUMBERS_KEY      = stringSetPreferencesKey("white_numbers")
+    private val POWERBALL_KEY          = intPreferencesKey("powerball_number")
+    private val HIGHLIGHT_ENABLED_KEY  = booleanPreferencesKey("highlight_enabled")
+    private val NOTIFICATIONS_ENABLED_KEY = booleanPreferencesKey("notifications_enabled")
+    private val LAST_DRAW_DATE_KEY     = stringPreferencesKey("last_known_draw_date")  // used by worker
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
-        if (isGranted) {
+        if (isGranted && notificationsEnabled) {
             scheduleBackgroundWinningCheck()
         }
     }
@@ -137,29 +141,15 @@ class MainActivity : AppCompatActivity() {
         container.addView(createSectionTitle("Powerball (Pick 1)"))
         container.addView(createGrid(maxPowerball, true))
 
-        // Notification permission & scheduling
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(
-                    this,
-                    Manifest.permission.POST_NOTIFICATIONS
-                ) == PackageManager.PERMISSION_GRANTED
-            ) {
-                scheduleBackgroundWinningCheck()
-            } else {
-                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-            }
-        } else {
-            scheduleBackgroundWinningCheck()
-        }
-
-        // Load saved selection and fetch latest draw
-        lifecycleScope.launch { loadSavedSelectionAndHighlightState() }
+        // Load saved preferences (numbers + toggles) and fetch latest draw
+        lifecycleScope.launch { loadSavedPreferences() }
         lifecycleScope.launch { fetchLatestWinningNumbersForUI() }
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.main_menu, menu)
         menu.findItem(R.id.menu_toggle_highlights)?.isChecked = showWinningHighlights
+        menu.findItem(R.id.menu_toggle_notifications)?.isChecked = notificationsEnabled
         return true
     }
 
@@ -176,22 +166,56 @@ class MainActivity : AppCompatActivity() {
                 applyHighlightState()
                 true
             }
+
+            R.id.menu_toggle_notifications -> {
+                notificationsEnabled = !notificationsEnabled
+                item.isChecked = notificationsEnabled
+
+                lifecycleScope.launch {
+                    dataStore.edit { prefs ->
+                        prefs[NOTIFICATIONS_ENABLED_KEY] = notificationsEnabled
+                    }
+
+                    if (notificationsEnabled) {
+                        scheduleBackgroundWinningCheck()
+                    } else {
+                        cancelBackgroundWinningCheck()
+                    }
+                }
+                true
+            }
+
             R.id.menu_settings -> {
                 startActivity(Intent(this, SettingsActivity::class.java))
                 true
             }
+
             else -> super.onOptionsItemSelected(item)
         }
     }
 
     private fun scheduleBackgroundWinningCheck() {
+        if (!notificationsEnabled) return
+
+        // Android 13+ permission check
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                return
+            }
+        }
+
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
 
         val periodicRequest = PeriodicWorkRequestBuilder<CheckWinningWorker>(
-            12, TimeUnit.HOURS,
-            1, TimeUnit.MINUTES
+            repeatInterval = 12, TimeUnit.HOURS,
+            flexTimeInterval = 1, TimeUnit.MINUTES
         )
             .setConstraints(constraints)
             .build()
@@ -199,121 +223,20 @@ class MainActivity : AppCompatActivity() {
         WorkManager.getInstance(this)
             .enqueueUniquePeriodicWork(
                 "powerball_winning_check",
-                ExistingPeriodicWorkPolicy.REPLACE,
+                ExistingPeriodicWorkPolicy.KEEP,
                 periodicRequest
             )
-
-        Log.i("WorkerSetup", "Powerball check scheduled (12h ±1min)")
     }
 
-    private suspend fun fetchLatestWinningNumbersForUI() {
-        withContext(Dispatchers.IO) {
-            try {
-                val doc = Jsoup.connect("https://www.texaslottery.com/export/sites/lottery/Games/Powerball/Winning_Numbers/print.html")
-                    .userAgent("Mozilla/5.0")
-                    .timeout(15000)
-                    .get()
-
-                val rows = doc.select("table tr")
-                if (rows.size < 2) throw IOException("No data rows found")
-
-                val cells = rows[1].select("td")
-                if (cells.size < 8) throw IOException("Incomplete row data")
-
-                val date = cells[0].text().trim()
-                val nums = cells.subList(1, 6).mapNotNull { it.text().trim().toIntOrNull() }
-                val pb = cells[6].text().trim().toIntOrNull()
-
-                if (nums.size == 5 && pb != null && pb in 1..26) {
-                    winningWhite.clear()
-                    winningWhite.addAll(nums)
-
-                    winningPB = pb
-
-                    val display = "Latest ($date): ${winningWhite.sorted().joinToString(" ")} PB $pb"
-
-                    withContext(Dispatchers.Main) {
-                        latestWinningText.text = display
-                        latestWinningText.setTextColor(Color.BLACK)
-                        if (showWinningHighlights) highlightWinningNumbers()
-                    }
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-                withContext(Dispatchers.Main) {
-                    latestWinningText.text = "Latest Draw: Unable to load"
-                    latestWinningText.setTextColor(Color.RED)
-                }
-            }
-        }
+    private fun cancelBackgroundWinningCheck() {
+        WorkManager.getInstance(this)
+            .cancelUniqueWork("powerball_winning_check")
     }
 
-    private fun highlightWinningNumbers() {
-        if (!showWinningHighlights) return
-
-        winningWhite.forEach { num ->
-            whiteButtons[num]?.let { btn ->
-                btn.backgroundTintList = null
-                btn.setBackgroundColor(
-                    if (selectedWhite.contains(num)) COLOR_GOLD else COLOR_WINNING
-                )
-                btn.setTextColor(
-                    if (selectedWhite.contains(num)) Color.BLACK else Color.WHITE
-                )
-            }
-        }
-
-        winningPB?.let { pbNum ->
-            pbButtons[pbNum]?.let { btn ->
-                btn.backgroundTintList = null
-                btn.setBackgroundColor(
-                    if (selectedPB == pbNum) COLOR_GOLD else COLOR_WINNING
-                )
-                btn.setTextColor(
-                    if (selectedPB == pbNum) Color.BLACK else Color.WHITE
-                )
-            }
-        }
-    }
-
-    private fun clearAllHighlights() {
-        winningWhite.forEach { num ->
-            whiteButtons[num]?.let { btn ->
-                btn.backgroundTintList = null
-                btn.setBackgroundColor(
-                    if (selectedWhite.contains(num)) COLOR_SELECTED_WHITE else COLOR_UNSELECTED
-                )
-                btn.setTextColor(
-                    if (selectedWhite.contains(num)) Color.WHITE else Color.BLACK
-                )
-            }
-        }
-
-        winningPB?.let { pbNum ->
-            pbButtons[pbNum]?.let { btn ->
-                btn.backgroundTintList = null
-                btn.setBackgroundColor(
-                    if (selectedPB == pbNum) COLOR_SELECTED_PB else COLOR_UNSELECTED
-                )
-                btn.setTextColor(
-                    if (selectedPB == pbNum) Color.WHITE else Color.BLACK
-                )
-            }
-        }
-    }
-
-    private fun applyHighlightState() {
-        if (showWinningHighlights) {
-            highlightWinningNumbers()
-        } else {
-            clearAllHighlights()
-        }
-    }
-
-    private suspend fun loadSavedSelectionAndHighlightState() {
+    private suspend fun loadSavedPreferences() {
         val prefs = dataStore.data.first()
 
-        // ── your existing number loading code ──
+        // White balls
         prefs[WHITE_NUMBERS_KEY]?.let { savedSet ->
             val validWhite = savedSet.mapNotNull { it.toIntOrNull() }
                 .filter { it in 1..maxWhite }
@@ -332,6 +255,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // Powerball
         prefs[POWERBALL_KEY]?.let { savedPB ->
             if (savedPB in 1..maxPowerball) {
                 selectedPB = savedPB
@@ -343,15 +267,19 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // ── NEW: load the toggle state ──
-        showWinningHighlights = prefs[HIGHLIGHT_ENABLED_KEY] ?: true   // default true if never saved
+        // UI toggles
+        showWinningHighlights = prefs[HIGHLIGHT_ENABLED_KEY] ?: true
+        notificationsEnabled = prefs[NOTIFICATIONS_ENABLED_KEY] ?: true
 
-        // Apply to UI
+        // Apply states
         updateDisplay()
-        applyHighlightState()           // or highlightWinningNumbers() if you don't have apply function yet
+        applyHighlightState()
+        invalidateOptionsMenu()  // refresh menu checkbox states
 
-        // Make sure menu checkbox is correct
-        invalidateOptionsMenu()         // ← important
+        // Schedule background check if enabled
+        if (notificationsEnabled) {
+            scheduleBackgroundWinningCheck()
+        }
     }
 
     private fun toggleWhite(num: Int) {
@@ -382,12 +310,13 @@ class MainActivity : AppCompatActivity() {
         }
 
         updateDisplay()
+        saveSelection()
     }
 
     private fun togglePowerball(num: Int) {
         val btn = pbButtons[num] ?: return
 
-        // Reset previous selection if any
+        // Reset previous
         selectedPB?.let { prev ->
             pbButtons[prev]?.let { prevBtn ->
                 prevBtn.backgroundTintList = null
@@ -419,6 +348,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         updateDisplay()
+        saveSelection()
     }
 
     private fun updateDisplay() {
@@ -455,14 +385,14 @@ class MainActivity : AppCompatActivity() {
 
         val grid = GridLayout(this).apply {
             columnCount = numbersPerRow
-            setPadding(8.dpToPx().toInt(),8.dpToPx().toInt(),8.dpToPx().toInt(),8.dpToPx().toInt())
+            setPadding(8.dpToPx().toInt(), 8.dpToPx().toInt(), 8.dpToPx().toInt(), 8.dpToPx().toInt())
         }
 
         for (i in 1..max) {
             val btn = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonStyle).apply {
                 text = i.toString()
                 textSize = 10f
-                setPadding(0,0,0,0)
+                setPadding(0, 0, 0, 0)
                 insetTop = 0
                 insetBottom = 0
                 minWidth = 0
@@ -479,19 +409,15 @@ class MainActivity : AppCompatActivity() {
 
                 setOnClickListener {
                     if (isPowerball) togglePowerball(i) else toggleWhite(i)
-                    saveSelection()
                 }
             }
 
-            // ────────────────────────────────────────────────
-            //   Fixed LayoutParams creation
-            // ────────────────────────────────────────────────
             val params = GridLayout.LayoutParams(
-                GridLayout.spec(GridLayout.UNDEFINED, 1f),   // row
-                GridLayout.spec(GridLayout.UNDEFINED, 1f)    // column
+                GridLayout.spec(GridLayout.UNDEFINED, 1f),
+                GridLayout.spec(GridLayout.UNDEFINED, 1f)
             ).apply {
                 width = 0
-                setMargins(1, 1, 1, 1)   // nicer spacing – feel free to use 2,2,2,2 or 1,1,1,1
+                setMargins(1, 1, 1, 1)
             }
 
             grid.addView(btn, params)
@@ -505,4 +431,110 @@ class MainActivity : AppCompatActivity() {
         TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, this, resources.displayMetrics)
 
     private fun Int.dpToPx(): Float = toFloat().dpToPx()
+
+    // Placeholder — replace with your actual fetch logic
+    private suspend fun fetchLatestWinningNumbersForUI() {
+        withContext(Dispatchers.IO) {
+            try {
+                val doc = Jsoup.connect("https://www.texaslottery.com/export/sites/lottery/Games/Powerball/Winning_Numbers/print.html")
+                    .userAgent("Mozilla/5.0")
+                    .timeout(15000)
+                    .get()
+
+                val cells = doc.select("table tr")[1].select("td")
+                if (cells.size >= 7) {
+                    val white = listOfNotNull(
+                        cells[1].text().trim().toIntOrNull(),
+                        cells[2].text().trim().toIntOrNull(),
+                        cells[3].text().trim().toIntOrNull(),
+                        cells[4].text().trim().toIntOrNull(),
+                        cells[5].text().trim().toIntOrNull()
+                    ).toSet()
+
+                    val pb = cells[6].text().trim().toIntOrNull()
+
+                    withContext(Dispatchers.Main) {
+                        winningWhite.clear()
+                        winningWhite.addAll(white)
+                        winningPB = pb
+                        latestWinningText.text = "Latest Draw: ${white.joinToString(" ")} PB $pb"
+                        applyHighlightState()
+                    }
+                }
+            } catch (e: IOException) {
+                withContext(Dispatchers.Main) {
+                    latestWinningText.text = "Latest Draw: (offline)"
+                }
+            }
+        }
+    }
+
+    private fun applyHighlightState() {
+        if (showWinningHighlights) {
+            highlightWinningNumbers()
+        } else {
+            clearAllHighlights()
+        }
+    }
+
+    private fun highlightWinningNumbers() {
+        winningWhite.forEach { num ->
+            whiteButtons[num]?.let { btn ->
+                if (selectedWhite.contains(num)) {
+                    btn.setBackgroundColor(COLOR_GOLD)
+                    btn.setTextColor(Color.BLACK)
+                } else {
+                    btn.setBackgroundColor(COLOR_WINNING)
+                    btn.setTextColor(Color.WHITE)
+                }
+            }
+        }
+
+        winningPB?.let { pb ->
+            pbButtons[pb]?.let { btn ->
+                if (selectedPB == pb) {
+                    btn.setBackgroundColor(COLOR_GOLD)
+                    btn.setTextColor(Color.BLACK)
+                } else {
+                    btn.setBackgroundColor(COLOR_WINNING)
+                    btn.setTextColor(Color.WHITE)
+                }
+            }
+        }
+    }
+
+    private fun clearAllHighlights() {
+        selectedWhite.forEach { num ->
+            whiteButtons[num]?.let { btn ->
+                btn.setBackgroundColor(COLOR_SELECTED_WHITE)
+                btn.setTextColor(Color.WHITE)
+            }
+        }
+
+        selectedPB?.let { pb ->
+            pbButtons[pb]?.let { btn ->
+                btn.setBackgroundColor(COLOR_SELECTED_PB)
+                btn.setTextColor(Color.WHITE)
+            }
+        }
+
+        // Non-selected winning numbers go back to unselected color
+        winningWhite.forEach { num ->
+            if (!selectedWhite.contains(num)) {
+                whiteButtons[num]?.let { btn ->
+                    btn.setBackgroundColor(COLOR_UNSELECTED)
+                    btn.setTextColor(Color.BLACK)
+                }
+            }
+        }
+
+        winningPB?.let { pb ->
+            if (selectedPB != pb) {
+                pbButtons[pb]?.let { btn ->
+                    btn.setBackgroundColor(COLOR_UNSELECTED)
+                    btn.setTextColor(Color.BLACK)
+                }
+            }
+        }
+    }
 }
