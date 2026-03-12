@@ -97,6 +97,9 @@ class MainActivity : AppCompatActivity() {
         val container = findViewById<LinearLayout>(R.id.contentContainer)
         container.setBackgroundColor(Color.parseColor("#000000"))
 
+        window.statusBarColor = android.graphics.Color.BLACK
+        window.navigationBarColor = android.graphics.Color.BLACK
+
         container.addView(MaterialTextView(this).apply {
             text = "Powerball"
             textSize = 28f
