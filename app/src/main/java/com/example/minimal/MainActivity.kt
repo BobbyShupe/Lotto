@@ -95,12 +95,12 @@ class MainActivity : AppCompatActivity() {
         setSupportActionBar(toolbar)
 
         val container = findViewById<LinearLayout>(R.id.contentContainer)
-        container.setBackgroundColor(Color.parseColor("#F5F5F5"))
+        container.setBackgroundColor(Color.parseColor("#000000"))
 
         container.addView(MaterialTextView(this).apply {
-            text = "Powerball Selector"
+            text = "Powerball"
             textSize = 28f
-            setTextColor(Color.BLACK)
+            setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
             setPadding(0, 0, 0, 16)
         })
@@ -108,7 +108,7 @@ class MainActivity : AppCompatActivity() {
         latestWinningText = MaterialTextView(this).apply {
             text = "Latest Draw: Loading..."
             textSize = 11f
-            setTextColor(Color.DKGRAY)
+            setTextColor(Color.YELLOW)
             gravity = Gravity.CENTER
             setPadding(0, 0, 0, 24)
         }
@@ -117,16 +117,16 @@ class MainActivity : AppCompatActivity() {
         selectedNumbersText = MaterialTextView(this).apply {
             text = "Select your numbers"
             textSize = 16f
-            setTextColor(Color.DKGRAY)
+            setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
             setPadding(0, 0, 0, 32)
         }
         container.addView(selectedNumbersText)
 
-        container.addView(createSectionTitle("White Balls (Pick 5)"))
+        container.addView(createSectionTitle("White Balls"))
         container.addView(createGrid(maxWhite, false))
 
-        container.addView(createSectionTitle("Powerball (Pick 1)"))
+        container.addView(createSectionTitle("Powerball"))
         container.addView(createGrid(maxPowerball, true))
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -392,12 +392,13 @@ class MainActivity : AppCompatActivity() {
                 textSize = 10f
                 setPadding(0, 0, 0, 0)
                 insetTop = 0
+
                 insetBottom = 0
                 minWidth = 0
                 minHeight = 0
                 minimumWidth = 0
-                minimumHeight = 40.dpToPx().toInt()
-                cornerRadius = 9999.dpToPx().toInt()
+                minimumHeight = 0
+                cornerRadius = 99999
 
                 backgroundTintList = null
                 setBackgroundColor(COLOR_UNSELECTED)
@@ -410,11 +411,14 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
+
+
             val params = GridLayout.LayoutParams(
                 GridLayout.spec(GridLayout.UNDEFINED, 1f),
                 GridLayout.spec(GridLayout.UNDEFINED, 1f)
             ).apply {
-                width = 0
+                width = 65
+                height = 85
                 setMargins(1, 1, 1, 1)
             }
 
