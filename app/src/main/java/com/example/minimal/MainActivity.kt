@@ -3,6 +3,8 @@ package com.example.minimal
 import androidx.lifecycle.lifecycleScope
 import android.content.Intent
 import android.Manifest
+import android.R.attr.insetLeft
+import android.R.attr.insetRight
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Color
@@ -42,6 +44,7 @@ import org.jsoup.Jsoup
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 import android.util.Log
+import androidx.core.graphics.toColorInt
 
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "powerball_selection")
 
@@ -93,6 +96,7 @@ class MainActivity : AppCompatActivity() {
 
         val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
         setSupportActionBar(toolbar)
+        supportActionBar?.setDisplayShowTitleEnabled(false)
 
         val container = findViewById<LinearLayout>(R.id.contentContainer)
         container.setBackgroundColor(Color.parseColor("#000000"))
@@ -380,28 +384,33 @@ class MainActivity : AppCompatActivity() {
 
     private fun createGrid(max: Int, isPowerball: Boolean): MaterialCardView {
         val card = MaterialCardView(this).apply {
-            radius = 12f.dpToPx()
-            cardElevation = 2f.dpToPx()
+            radius = 16f.dpToPx()           // nicer card corners
+            cardElevation = 4f.dpToPx()
+            setCardBackgroundColor("#000000".toColorInt())  // dark subtle background (optional)
         }
 
         val grid = GridLayout(this).apply {
             columnCount = numbersPerRow
-            setPadding(8.dpToPx().toInt(), 8.dpToPx().toInt(), 8.dpToPx().toInt(), 8.dpToPx().toInt())
+            // More generous padding so numbers don't touch screen edges
+            setPadding(2.dpToPx().toInt(), 8.dpToPx().toInt(), 2.dpToPx().toInt(), 8.dpToPx().toInt())
         }
 
         for (i in 1..max) {
             val btn = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonStyle).apply {
                 text = i.toString()
-                textSize = 10f
+                textSize = 14f                  // bigger numbers look better when button is larger
+                gravity = Gravity.CENTER
                 setPadding(0, 0, 0, 0)
                 insetTop = 0
-
                 insetBottom = 0
-                minWidth = 0
-                minHeight = 0
                 minimumWidth = 0
                 minimumHeight = 0
-                cornerRadius = 99999
+
+                // Force circular shape (works very reliably)
+                cornerRadius = 500                  // very high value → effectively circle
+
+                // Alternative modern way (Material 1.5+): percentage corner (50% = perfect circle)
+                // shapeAppearanceModel = shapeAppearanceModel.withCornerSize(50f)  // uncomment if preferred
 
                 backgroundTintList = null
                 setBackgroundColor(COLOR_UNSELECTED)
@@ -414,15 +423,14 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-
-
+            // Let buttons fill available cell space evenly + small margin
             val params = GridLayout.LayoutParams(
-                GridLayout.spec(GridLayout.UNDEFINED, 1f),
-                GridLayout.spec(GridLayout.UNDEFINED, 1f)
+                GridLayout.spec(GridLayout.UNDEFINED, 1f),  // stretch horizontally
+                GridLayout.spec(GridLayout.UNDEFINED, 1f)   // stretch vertically
             ).apply {
-                width = 65
-                height = 85
-                setMargins(1, 1, 1, 1)
+                width = 25.dpToPx().toInt()                   // 0 + weight = fill cell
+                height = 27.dpToPx().toInt()
+                setMargins(1.dpToPx().toInt(), 3.dpToPx().toInt(), 1.dpToPx().toInt(), 3.dpToPx().toInt())        // bigger gaps → buttons feel less cramped
             }
 
             grid.addView(btn, params)
