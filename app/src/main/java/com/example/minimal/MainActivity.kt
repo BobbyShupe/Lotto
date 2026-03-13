@@ -7,7 +7,9 @@ import android.R.attr.insetLeft
 import android.R.attr.insetRight
 import android.content.Context
 import android.content.pm.PackageManager
+import android.content.res.ColorStateList
 import android.graphics.Color
+import android.graphics.Typeface
 import android.os.Build
 import android.os.Bundle
 import android.util.TypedValue
@@ -44,6 +46,7 @@ import org.jsoup.Jsoup
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 import android.util.Log
+import android.view.ViewOutlineProvider
 import androidx.core.graphics.toColorInt
 
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "powerball_selection")
@@ -293,26 +296,28 @@ class MainActivity : AppCompatActivity() {
         val btn = whiteButtons[num] ?: return
 
         if (selectedWhite.contains(num)) {
+            // Deselect
             selectedWhite.remove(num)
             btn.backgroundTintList = null
             btn.setBackgroundColor(
-                if (showWinningHighlights && winningWhite.contains(num)) COLOR_WINNING
-                else COLOR_UNSELECTED
+                if (showWinningHighlights && winningWhite.contains(num)) COLOR_GOLD
+                else Color.parseColor("#f0f0f0")  // light gray-white unselected
             )
             btn.setTextColor(
-                if (showWinningHighlights && winningWhite.contains(num)) Color.WHITE
-                else Color.BLACK
+                if (showWinningHighlights && winningWhite.contains(num)) Color.BLACK
+                else Color.BLACK  // dark text on light bg
             )
         } else if (selectedWhite.size < whiteLimit) {
+            // Select
             selectedWhite.add(num)
             btn.backgroundTintList = null
             btn.setBackgroundColor(
                 if (showWinningHighlights && winningWhite.contains(num)) COLOR_GOLD
-                else COLOR_SELECTED_WHITE
+                else Color.parseColor("#9e9e9e")  // medium gray when selected
             )
             btn.setTextColor(
                 if (showWinningHighlights && winningWhite.contains(num)) Color.BLACK
-                else Color.WHITE
+                else Color.WHITE  // white text on medium gray
             )
         }
 
@@ -323,32 +328,35 @@ class MainActivity : AppCompatActivity() {
     private fun togglePowerball(num: Int) {
         val btn = pbButtons[num] ?: return
 
+        // First, reset previous selection (if any)
         selectedPB?.let { prev ->
             pbButtons[prev]?.let { prevBtn ->
                 prevBtn.backgroundTintList = null
                 prevBtn.setBackgroundColor(
-                    if (showWinningHighlights && winningPB == prev) COLOR_WINNING
-                    else COLOR_UNSELECTED
+                    if (showWinningHighlights && winningPB == prev) COLOR_GOLD
+                    else Color.parseColor("#f0f0f0")  // light unselected
                 )
                 prevBtn.setTextColor(
-                    if (showWinningHighlights && winningPB == prev) Color.WHITE
+                    if (showWinningHighlights && winningPB == prev) Color.BLACK
                     else Color.BLACK
                 )
             }
         }
 
         if (selectedPB == num) {
+            // Deselect (toggle off)
             selectedPB = null
         } else {
+            // Select new one
             selectedPB = num
             btn.backgroundTintList = null
             btn.setBackgroundColor(
                 if (showWinningHighlights && winningPB == num) COLOR_GOLD
-                else COLOR_SELECTED_PB
+                else Color.parseColor("#9e9e9e")  // medium gray when selected
             )
             btn.setTextColor(
                 if (showWinningHighlights && winningPB == num) Color.BLACK
-                else Color.WHITE
+                else Color.WHITE  // white on selected gray
             )
         }
 
@@ -384,21 +392,25 @@ class MainActivity : AppCompatActivity() {
 
     private fun createGrid(max: Int, isPowerball: Boolean): MaterialCardView {
         val card = MaterialCardView(this).apply {
-            radius = 16f.dpToPx()           // nicer card corners
-            cardElevation = 4f.dpToPx()
-            setCardBackgroundColor("#000000".toColorInt())  // dark subtle background (optional)
+            radius = 4f.dpToPx()           // card itself has nice rounding
+            cardElevation = 6f.dpToPx()
+            setCardBackgroundColor(Color.parseColor("#111111"))  // very dark base
+
+            // Optional: subtle mesh/perforated feel (requires drawable)
+            // background = ContextCompat.getDrawable(context, R.drawable.mesh_background)
         }
 
         val grid = GridLayout(this).apply {
             columnCount = numbersPerRow
-            // More generous padding so numbers don't touch screen edges
-            setPadding(2.dpToPx().toInt(), 8.dpToPx().toInt(), 2.dpToPx().toInt(), 8.dpToPx().toInt())
+            setPadding(12.dpToPx().toInt(), 12.dpToPx().toInt(), 12.dpToPx().toInt(), 12.dpToPx().toInt())
+            // minimal padding around whole grid
         }
 
         for (i in 1..max) {
             val btn = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonStyle).apply {
                 text = i.toString()
-                textSize = 14f                  // bigger numbers look better when button is larger
+                textSize = 9f                  // larger text like on machine
+                setTypeface(null, Typeface.BOLD) // bold numbers
                 gravity = Gravity.CENTER
                 setPadding(0, 0, 0, 0)
                 insetTop = 0
@@ -406,15 +418,21 @@ class MainActivity : AppCompatActivity() {
                 minimumWidth = 0
                 minimumHeight = 0
 
-                // Force circular shape (works very reliably)
-                cornerRadius = 500                  // very high value → effectively circle
+                // Stadium / pill shape – high but finite corner radius
+                cornerRadius = 2.dpToPx().toInt()   // 24–32 dp gives nice rounded rect
 
-                // Alternative modern way (Material 1.5+): percentage corner (50% = perfect circle)
-                // shapeAppearanceModel = shapeAppearanceModel.withCornerSize(50f)  // uncomment if preferred
-
+                // Base look: vivid red + white text + thin border
                 backgroundTintList = null
-                setBackgroundColor(COLOR_UNSELECTED)
+                setBackgroundColor(Color.parseColor("#ffffff"))   // machine-like red
                 setTextColor(Color.BLACK)
+                //setStrokeColor(ColorStateList.valueOf(Color.parseColor("#b71c1c"))) // darker red border
+                //strokeWidth = 2.dpToPx().toInt()   // thin metallic-like outline
+
+                // Slight 3D push-button feel
+                elevation = 2f
+                translationZ = 2f   // tiny lift
+                outlineProvider = ViewOutlineProvider.BACKGROUND
+                clipToOutline = true
 
                 if (isPowerball) pbButtons[i] = this else whiteButtons[i] = this
 
@@ -423,14 +441,13 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            // Let buttons fill available cell space evenly + small margin
             val params = GridLayout.LayoutParams(
-                GridLayout.spec(GridLayout.UNDEFINED, 1f),  // stretch horizontally
-                GridLayout.spec(GridLayout.UNDEFINED, 1f)   // stretch vertically
+                GridLayout.spec(GridLayout.UNDEFINED, 1f),
+                GridLayout.spec(GridLayout.UNDEFINED, 1f)
             ).apply {
-                width = 25.dpToPx().toInt()                   // 0 + weight = fill cell
-                height = 27.dpToPx().toInt()
-                setMargins(1.dpToPx().toInt(), 3.dpToPx().toInt(), 1.dpToPx().toInt(), 3.dpToPx().toInt())        // bigger gaps → buttons feel less cramped
+                width = 15.dpToPx().toInt()
+                height = 20.dpToPx().toInt()
+                    setMargins(15, 15, 15, 15)   // very tight – almost no gap
             }
 
             grid.addView(btn, params)
