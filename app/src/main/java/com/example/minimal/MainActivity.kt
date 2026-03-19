@@ -79,12 +79,6 @@ class MainActivity : AppCompatActivity() {
     private val COLOR_SELECTED_PB    = Color.parseColor("#D32F2F")
     private val COLOR_UNSELECTED     = Color.LTGRAY
 
-    private val WHITE_NUMBERS_KEY      = stringSetPreferencesKey("white_numbers")
-    private val POWERBALL_KEY          = intPreferencesKey("powerball_number")
-    private val HIGHLIGHT_ENABLED_KEY  = booleanPreferencesKey("highlight_enabled")
-    private val NOTIFICATIONS_ENABLED_KEY = booleanPreferencesKey("notifications_enabled")
-    private val LAST_DRAW_DATE_KEY     = stringPreferencesKey("last_known_draw_date")
-
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -95,6 +89,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        NotificationChannels.createAll(this)
         setContentView(R.layout.activity_main)
 
         val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
@@ -171,7 +166,7 @@ class MainActivity : AppCompatActivity() {
                 item.isChecked = showWinningHighlights
                 lifecycleScope.launch {
                     dataStore.edit { prefs ->
-                        prefs[HIGHLIGHT_ENABLED_KEY] = showWinningHighlights
+                        prefs[DataStoreKeys.HIGHLIGHT_ENABLED_KEY] = showWinningHighlights
                     }
                 }
                 applyHighlightState()
@@ -184,7 +179,7 @@ class MainActivity : AppCompatActivity() {
 
                 lifecycleScope.launch {
                     dataStore.edit { prefs ->
-                        prefs[NOTIFICATIONS_ENABLED_KEY] = notificationsEnabled
+                        prefs[DataStoreKeys.NOTIFICATIONS_ENABLED_KEY] = notificationsEnabled
                     }
 
                     if (notificationsEnabled) {
@@ -251,7 +246,7 @@ class MainActivity : AppCompatActivity() {
     private suspend fun loadSavedPreferences() {
         val prefs = dataStore.data.first()
 
-        prefs[WHITE_NUMBERS_KEY]?.let { savedSet ->
+        prefs[DataStoreKeys.WHITE_NUMBERS_KEY]?.let { savedSet ->
             val validWhite = savedSet.mapNotNull { it.toIntOrNull() }
                 .filter { it in 1..maxWhite }
                 .take(whiteLimit)
@@ -269,7 +264,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        prefs[POWERBALL_KEY]?.let { savedPB ->
+        prefs[DataStoreKeys.POWERBALL_KEY]?.let { savedPB ->
             if (savedPB in 1..maxPowerball) {
                 selectedPB = savedPB
                 pbButtons[savedPB]?.let { btn ->
@@ -280,8 +275,8 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        showWinningHighlights = prefs[HIGHLIGHT_ENABLED_KEY] ?: true
-        notificationsEnabled = prefs[NOTIFICATIONS_ENABLED_KEY] ?: true
+        showWinningHighlights = prefs[DataStoreKeys.HIGHLIGHT_ENABLED_KEY] ?: true
+        notificationsEnabled = prefs[DataStoreKeys.NOTIFICATIONS_ENABLED_KEY] ?: true
 
         updateDisplay()
         applyHighlightState()
@@ -373,11 +368,11 @@ class MainActivity : AppCompatActivity() {
     private fun saveSelection() {
         lifecycleScope.launch {
             dataStore.edit { prefs ->
-                prefs[WHITE_NUMBERS_KEY] = selectedWhite.map { it.toString() }.toSet()
+                prefs[DataStoreKeys.WHITE_NUMBERS_KEY] = selectedWhite.map { it.toString() }.toSet()
                 if (selectedPB != null) {
-                    prefs[POWERBALL_KEY] = selectedPB!!
+                    prefs[DataStoreKeys.POWERBALL_KEY] = selectedPB!!
                 } else {
-                    prefs.remove(POWERBALL_KEY)
+                    prefs.remove(DataStoreKeys.POWERBALL_KEY)
                 }
             }
         }

@@ -22,12 +22,6 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
 
-// DataStore keys
-private val WHITE_NUMBERS_KEY       = stringSetPreferencesKey("white_numbers")
-private val POWERBALL_KEY           = intPreferencesKey("powerball_number")
-private val LAST_DRAW_DATE_KEY      = stringPreferencesKey("last_known_draw_date")
-private val HISTORY_KEY             = stringPreferencesKey("winning_history_json")
-
 private fun notifyKey(categoryId: String) = booleanPreferencesKey("notify_$categoryId")
 
 private val DATE_FORMATTER = DateTimeFormatter.ofPattern("MM/dd/yyyy")
@@ -60,7 +54,7 @@ class CheckWinningWorker(
             }
 
             val prefs = applicationContext.dataStore.data.first()
-            val lastKnownDateStr = prefs[LAST_DRAW_DATE_KEY]
+            val lastKnownDateStr = prefs[DataStoreKeys.LAST_DRAW_DATE_KEY]
             val lastKnownDate = lastKnownDateStr?.let {
                 try { LocalDate.parse(it, DATE_FORMATTER) } catch (_: Exception) { null }
             }
@@ -85,16 +79,16 @@ class CheckWinningWorker(
             // ────────────────────────────────────────────────
             // Store to history (including user's numbers at that moment)
             // ────────────────────────────────────────────────
-            val historyJson = prefs[HISTORY_KEY] ?: "[]"
+            val historyJson = prefs[DataStoreKeys.HISTORY_KEY] ?: "[]"
             val historyList = json.decodeFromString<MutableList<HistoryEntry>>(historyJson)
 
             // Avoid duplicate entries for the same date
             if (historyList.none { it.drawDate == fetchedDateStr }) {
-                val userWhiteAtTime = prefs[WHITE_NUMBERS_KEY]
+                val userWhiteAtTime = prefs[DataStoreKeys.WHITE_NUMBERS_KEY]
                     ?.mapNotNull { it.toIntOrNull() }
                     ?.toSet() ?: emptySet()
 
-                val userPBAtTime = prefs[POWERBALL_KEY]
+                val userPBAtTime = prefs[DataStoreKeys.POWERBALL_KEY]
 
                 historyList.add(
                     HistoryEntry(
@@ -109,16 +103,16 @@ class CheckWinningWorker(
 
                 // No limit - keep all entries
                 applicationContext.dataStore.edit { settings ->
-                    settings[HISTORY_KEY] = json.encodeToString(historyList)
+                    settings[DataStoreKeys.HISTORY_KEY] = json.encodeToString(historyList)
                 }
             }
 
             // User's current selection for matching/notification
-            val userWhite = prefs[WHITE_NUMBERS_KEY]
+            val userWhite = prefs[DataStoreKeys.WHITE_NUMBERS_KEY]
                 ?.mapNotNull { it.toIntOrNull() }
                 ?.toSet() ?: emptySet()
 
-            val userPB = prefs[POWERBALL_KEY]
+            val userPB = prefs[DataStoreKeys.POWERBALL_KEY]
 
             val whiteMatches = userWhite.intersect(winningWhite).size
             val pbMatch = userPB == winningPB
@@ -141,7 +135,7 @@ class CheckWinningWorker(
 
             // Remember this draw date to avoid re-processing
             applicationContext.dataStore.edit { settings ->
-                settings[LAST_DRAW_DATE_KEY] = fetchedDateStr
+                settings[DataStoreKeys.LAST_DRAW_DATE_KEY] = fetchedDateStr
             }
 
             Result.success()
