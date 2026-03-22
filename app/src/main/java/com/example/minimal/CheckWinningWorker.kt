@@ -77,12 +77,11 @@ class CheckWinningWorker(
             val winningPB = cells[6].text().trim().toIntOrNull()?.takeIf { it in 1..26 }
 
             // ────────────────────────────────────────────────
-            // Store to history (including user's numbers at that moment)
+            // Store to history (unchanged)
             // ────────────────────────────────────────────────
             val historyJson = prefs[DataStoreKeys.HISTORY_KEY] ?: "[]"
             val historyList = json.decodeFromString<MutableList<HistoryEntry>>(historyJson)
 
-            // Avoid duplicate entries for the same date
             if (historyList.none { it.drawDate == fetchedDateStr }) {
                 val userWhiteAtTime = prefs[DataStoreKeys.WHITE_NUMBERS_KEY]
                     ?.mapNotNull { it.toIntOrNull() }
@@ -97,27 +96,28 @@ class CheckWinningWorker(
                         winningPowerball = winningPB,
                         userWhite = userWhiteAtTime,
                         userPowerball = userPBAtTime,
-                        note = ""   // starts empty
+                        note = ""
                     )
                 )
 
-                // No limit - keep all entries
                 applicationContext.dataStore.edit { settings ->
                     settings[DataStoreKeys.HISTORY_KEY] = json.encodeToString(historyList)
                 }
             }
 
-            // User's current selection for matching/notification
+            // User's current selection
             val userWhite = prefs[DataStoreKeys.WHITE_NUMBERS_KEY]
                 ?.mapNotNull { it.toIntOrNull() }
                 ?.toSet() ?: emptySet()
 
             val userPB = prefs[DataStoreKeys.POWERBALL_KEY]
 
-            val whiteMatches = userWhite.intersect(winningWhite).size
+            // ─── Compute matches ────────────────────────────────
+            val matchedWhite = userWhite.intersect(winningWhite)
+            val whiteMatchesCount = matchedWhite.size
             val pbMatch = userPB == winningPB
 
-            val category = NotificationChannels.findCategory(whiteMatches, pbMatch)
+            val category = NotificationChannels.findCategory(whiteMatchesCount, pbMatch)
 
             if (category != null) {
                 val notifyPrefs = applicationContext.settingsDataStore.data.first()
@@ -127,13 +127,15 @@ class CheckWinningWorker(
                     showMatchNotification(
                         drawDate = fetchedDateStr,
                         category = category,
-                        whiteMatches = whiteMatches,
-                        pbMatch = pbMatch
+                        matchedWhite = matchedWhite.sorted(),           // ← sorted for readability
+                        pbMatch = pbMatch,
+                        winningPB = winningPB,
+                        whiteMatchesCount = whiteMatchesCount   // ← add this line
                     )
                 }
             }
 
-            // Remember this draw date to avoid re-processing
+            // Remember this draw
             applicationContext.dataStore.edit { settings ->
                 settings[DataStoreKeys.LAST_DRAW_DATE_KEY] = fetchedDateStr
             }
@@ -150,36 +152,45 @@ class CheckWinningWorker(
     private fun showMatchNotification(
         drawDate: String,
         category: MatchCategory,
-        whiteMatches: Int,
-        pbMatch: Boolean
+        matchedWhite: List<Int>,           // ← changed to List<Int>
+        pbMatch: Boolean,
+        winningPB: Int?,
+        whiteMatchesCount: Int
     ) {
         val context = applicationContext
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         val title = when {
-            whiteMatches == 5 && pbMatch -> "JACKPOT WINNER!"
-            whiteMatches == 5 -> "5 White Balls – Major Prize!"
-            whiteMatches >= 4 -> "Strong Match – Prize!"
-            whiteMatches >= 1 || pbMatch -> "You Matched!"
-            else -> "Draw Result"
+            matchedWhite.size == 5 && pbMatch -> "JACKPOT WINNER!"
+            matchedWhite.size == 5 -> "5 White Balls – Major Prize!"
+            matchedWhite.size >= 4 -> "Strong Match – Prize Likely!"
+            matchedWhite.isNotEmpty() || pbMatch -> "You Matched!"
+            else -> "Powerball Result"
         }
 
         val message = buildString {
-            append("Draw on $drawDate: ")
+            append("Draw $drawDate: ")
+
             when {
-                whiteMatches == 5 && pbMatch -> append("5 white + Powerball – Jackpot!")
-                whiteMatches == 5 -> append("5 white balls matched")
-                whiteMatches > 0 || pbMatch -> {
-                    if (whiteMatches > 0) {
-                        append("$whiteMatches white ${if (whiteMatches > 1) "balls" else "ball"}")
-                    }
-                    if (pbMatch) {
-                        if (whiteMatches > 0) append(" + ")
-                        append("Powerball")
-                    }
-                    append(" matched.")
+                matchedWhite.size == 5 && pbMatch -> {
+                    append("JACKPOT! All 5 white + Powerball matched.")
                 }
-                else -> append("No matches this time.")
+                matchedWhite.size == 5 -> {
+                    append("5 white balls matched: ${matchedWhite.joinToString(", ")}")
+                }
+                matchedWhite.isNotEmpty() || pbMatch -> {
+                    if (matchedWhite.isNotEmpty()) {
+                        append("${matchedWhite.size} white: ${matchedWhite.joinToString(", ")}")
+                    }
+                    if (pbMatch && winningPB != null) {
+                        if (matchedWhite.isNotEmpty()) append(" • ")
+                        append("Powerball: $winningPB")
+                    }
+                    append(" matched")
+                }
+                else -> {
+                    append("No matches this time.")
+                }
             }
         }
 
@@ -195,6 +206,7 @@ class CheckWinningWorker(
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle(title)
             .setContentText(message)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))  // ← helps when text is longer
             .setPriority(priority)
             .setAutoCancel(true)
             .build()
