@@ -440,8 +440,8 @@ class MainActivity : AppCompatActivity() {
                 GridLayout.spec(GridLayout.UNDEFINED, 1f),
                 GridLayout.spec(GridLayout.UNDEFINED, 1f)
             ).apply {
-                width = 10.dpToPx().toInt()
-                height = 22.dpToPx().toInt()
+                width = 15.dpToPx().toInt()
+                height = 21.dpToPx().toInt()
                     setMargins(20, 15, 20, 15)   // very tight – almost no gap
             }
 
@@ -545,7 +545,7 @@ class MainActivity : AppCompatActivity() {
         winningWhite.forEach { num ->
             if (!selectedWhite.contains(num)) {
                 whiteButtons[num]?.let { btn ->
-                    btn.setBackgroundColor(COLOR_UNSELECTED)
+                    btn.setBackgroundColor(Color.WHITE)
                     btn.setTextColor(Color.BLACK)
                 }
             }
@@ -554,7 +554,7 @@ class MainActivity : AppCompatActivity() {
         winningPB?.let { pb ->
             if (selectedPB != pb) {
                 pbButtons[pb]?.let { btn ->
-                    btn.setBackgroundColor(COLOR_UNSELECTED)
+                    btn.setBackgroundColor(Color.WHITE)
                     btn.setTextColor(Color.BLACK)
                 }
             }
