@@ -73,10 +73,10 @@ class MainActivity : AppCompatActivity() {
     private var showWinningHighlights = true
     private var notificationsEnabled = true
 
-    private val COLOR_WINNING = Color.parseColor("#9C27B0")
+    private val COLOR_WINNING = Color.parseColor("#C0C0C0")
     private val COLOR_GOLD     = Color.parseColor("#FFD700")
-    private val COLOR_SELECTED_WHITE = Color.parseColor("#616161")
-    private val COLOR_SELECTED_PB    = Color.parseColor("#D32F2F")
+    private val COLOR_SELECTED_WHITE = Color.parseColor("#61D161")
+    private val COLOR_SELECTED_PB    = Color.parseColor("#23DF2F")
     private val COLOR_UNSELECTED     = Color.LTGRAY
 
     private val notificationPermissionLauncher = registerForActivityResult(
