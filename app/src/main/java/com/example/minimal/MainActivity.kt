@@ -404,7 +404,7 @@ class MainActivity : AppCompatActivity() {
         for (i in 1..max) {
             val btn = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonStyle).apply {
                 text = i.toString()
-                textSize = 9f                  // larger text like on machine
+                textSize = 11f                  // larger text like on machine
                 setTypeface(null, Typeface.BOLD) // bold numbers
                 gravity = Gravity.CENTER
                 setPadding(0, 0, 0, 0)
