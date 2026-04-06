@@ -414,7 +414,7 @@ class MainActivity : AppCompatActivity() {
                 minimumHeight = 0
 
                 // Stadium / pill shape – high but finite corner radius
-                cornerRadius = 2.dpToPx().toInt()   // 24–32 dp gives nice rounded rect
+                cornerRadius = 1.dpToPx().toInt()   // 24–32 dp gives nice rounded rect
 
                 // Base look: vivid red + white text + thin border
                 backgroundTintList = null
@@ -440,9 +440,9 @@ class MainActivity : AppCompatActivity() {
                 GridLayout.spec(GridLayout.UNDEFINED, 1f),
                 GridLayout.spec(GridLayout.UNDEFINED, 1f)
             ).apply {
-                width = 15.dpToPx().toInt()
-                height = 20.dpToPx().toInt()
-                    setMargins(15, 15, 15, 15)   // very tight – almost no gap
+                width = 10.dpToPx().toInt()
+                height = 22.dpToPx().toInt()
+                    setMargins(20, 15, 20, 15)   // very tight – almost no gap
             }
 
             grid.addView(btn, params)
