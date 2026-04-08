@@ -224,7 +224,7 @@ class MainActivity : AppCompatActivity() {
             .build()
 
         val periodicRequest = PeriodicWorkRequestBuilder<CheckWinningWorker>(
-            repeatInterval = 12, TimeUnit.HOURS,
+            repeatInterval = 1, TimeUnit.HOURS,
             flexTimeInterval = 1, TimeUnit.MINUTES
         )
             .setConstraints(constraints)
