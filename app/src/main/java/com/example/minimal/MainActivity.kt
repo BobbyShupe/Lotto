@@ -75,9 +75,9 @@ class MainActivity : AppCompatActivity() {
 
     private val COLOR_WINNING = Color.parseColor("#C0C0C0")
     private val COLOR_GOLD     = Color.parseColor("#FFD700")
-    private val COLOR_SELECTED_WHITE = Color.parseColor("#61D161")
-    private val COLOR_SELECTED_PB    = Color.parseColor("#23DF2F")
-    private val COLOR_UNSELECTED     = Color.LTGRAY
+    private val COLOR_SELECTED_WHITE = Color.parseColor("#46C3FB")
+    private val COLOR_SELECTED_PB    = Color.parseColor("#46C3FB")
+    private val COLOR_UNSELECTED     = Color.WHITE
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -259,7 +259,7 @@ class MainActivity : AppCompatActivity() {
                 whiteButtons[num]?.let { btn ->
                     btn.backgroundTintList = null
                     btn.setBackgroundColor(COLOR_SELECTED_WHITE)
-                    btn.setTextColor(Color.WHITE)
+                    btn.setTextColor(Color.BLACK)
                 }
             }
         }
@@ -270,7 +270,7 @@ class MainActivity : AppCompatActivity() {
                 pbButtons[savedPB]?.let { btn ->
                     btn.backgroundTintList = null
                     btn.setBackgroundColor(COLOR_SELECTED_PB)
-                    btn.setTextColor(Color.WHITE)
+                    btn.setTextColor(Color.BLACK)
                 }
             }
         }
@@ -296,7 +296,7 @@ class MainActivity : AppCompatActivity() {
             btn.backgroundTintList = null
             btn.setBackgroundColor(
                 if (showWinningHighlights && winningWhite.contains(num)) COLOR_GOLD
-                else Color.parseColor("#f0f0f0")  // light gray-white unselected
+                else Color.WHITE  // light gray-white unselected
             )
             btn.setTextColor(
                 if (showWinningHighlights && winningWhite.contains(num)) Color.BLACK
@@ -308,11 +308,11 @@ class MainActivity : AppCompatActivity() {
             btn.backgroundTintList = null
             btn.setBackgroundColor(
                 if (showWinningHighlights && winningWhite.contains(num)) COLOR_GOLD
-                else Color.parseColor("#9e9e9e")  // medium gray when selected
+                else COLOR_SELECTED_WHITE // medium gray when selected
             )
             btn.setTextColor(
                 if (showWinningHighlights && winningWhite.contains(num)) Color.BLACK
-                else Color.WHITE  // white text on medium gray
+                else Color.BLACK  // white text on medium gray
             )
         }
 
@@ -329,7 +329,7 @@ class MainActivity : AppCompatActivity() {
                 prevBtn.backgroundTintList = null
                 prevBtn.setBackgroundColor(
                     if (showWinningHighlights && winningPB == prev) COLOR_GOLD
-                    else Color.parseColor("#f0f0f0")  // light unselected
+                    else Color.WHITE  // light unselected
                 )
                 prevBtn.setTextColor(
                     if (showWinningHighlights && winningPB == prev) Color.BLACK
@@ -347,11 +347,11 @@ class MainActivity : AppCompatActivity() {
             btn.backgroundTintList = null
             btn.setBackgroundColor(
                 if (showWinningHighlights && winningPB == num) COLOR_GOLD
-                else Color.parseColor("#9e9e9e")  // medium gray when selected
+                else COLOR_SELECTED_PB  // medium gray when selected
             )
             btn.setTextColor(
                 if (showWinningHighlights && winningPB == num) Color.BLACK
-                else Color.WHITE  // white on selected gray
+                else Color.BLACK  // white on selected gray
             )
         }
 
